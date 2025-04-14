@@ -1,72 +1,101 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Résumé Vocal</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons"rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!--link rel="shortcut icon" href="https://www.callcentrehelper.com/images/stories/2023/08/voice-1310817572-760.jpg" type="image/x-icon"--->
 </head>
 <body>
-  <main>
-    <button class="mic-toggle" id="mic">
-      <span class="material-icons">mic</span>
-    </button>
-    <audio class="playback" controls></audio>
-    <div id="output" class="outputText"></div>
-  </main>
+    
+    <main>
 
-  <script>
-    const mic = document.getElementById("mic");
-    const output = document.getElementById("output");
+        <button class="mic-toggle" id="mic">
+            <span class="material-icons">mic</span>
+        </button>
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.lang = "fr-FR";
-    recognition.interimResults = false;
+        <audio class="playback" controls></audio>
 
-    let isListening = false;
-    let isRecognizing = false;
 
-    recognition.onresult = async (e) => {
-      const transcript = e.results[0][0].transcript;
+        <div id="output" class="outputText"></div>
+    </main>
 
-      // Appel backend pour résumé
-      const response = await fetch('http://localhost:5000/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: transcript })
-      });
+    <script src="main.js"></script>
 
-      //recupération du résumé
-      const data = await response.json();
-      output.textContent = data.summary;
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition){
+            alert("Votre navigateur ne supporte pas la reconnaissance vocale")
+        } else {
+            const mic = document.getElementById("mic");
+            const output = document.getElementById("output");
+            const audioPlayer = document.querySelector("audio");
+            const recognition = new SpeechRecognition();
+            recognition.lang = "fr-FR";
+            recognition.interimResults = false;
+        
+            let transcript = ""; // transcript global
+            let audioChunks = [];
+        
+            recognition.onresult = (event) => {
+                transcript = event.results[0][0].transcript;
+                console.log("Transcript reçu :", transcript);
+            };
+        
+            mic.addEventListener("click", async () => {
+                mic.classList.add("active");
+        
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+        
+                mediaRecorder.ondataavailable = (e) => {
+                    audioChunks.push(e.data);
+                };
+        
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    audioPlayer.src = URL.createObjectURL(audioBlob);
+        
+                    const formData = new FormData();
+                    formData.append('text', transcript);
+                    formData.append('audio', audioBlob, 'audio.webm');
+        
+                    try {
+                        const res = await fetch('http://127.0.0.1:5000/analyze', {
+                            method: 'POST',
+                            mode: 'cors',
+                            credentials: 'include',
+                            body: formData 
+                        });
+        
+                        const data = await res.json();
+                        output.innerHTML = `
+                            <p><strong>Résumé :</strong> ${data.summary}</p>
+                            <p><strong>Émotion détectée :</strong> ${data.emotion}</p>
+                        `;
+                        console.log("Réponse backend :", data);
+                    } catch (err) {
+                        console.error(err);
+                        output.textContent = "Erreur dans l'analyse.";
+                    }
+                };
+        
+                recognition.start();
+                mediaRecorder.start();
+        
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                    recognition.stop();
+                    mic.classList.remove("active");
+                }, 5000);
+            });
+        }
+        </script>
+        
+        
 
-      // Arrêt automatique après une phrase
-      mic.classList.remove("active");
-      isListening = false;
-    };
-
-    recognition.onerror = (e) => {
-      output.textContent = "Erreur : " + e.error;
-      mic.classList.remove("active");
-      isListening = false;
-    };
-
-    mic.addEventListener("click", () => {
-      isListening = !isListening;
-
-      if (isListening && !isRecognizing) {
-        mic.classList.add("active");
-        recognition.start();
-      } else {
-        mic.classList.remove("active");
-        recognition.stop();
-      }
-    });
-
-    recognition.onstart = () => { isRecognizing = true; };
-    recognition.onend = () => { isRecognizing = false; };
-  </script>
 </body>
-</html>
+</html> 
