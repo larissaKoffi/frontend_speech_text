@@ -64,7 +64,7 @@
                     formData.append('audio', audioBlob, 'audio.webm');
         
                     try {
-                        const res = await fetch('laryK/backend_speech_text/analyze', {
+                        const res = await fetch('https://huggingface.co/spaces/laryK/backend_speech_text/analyze', {
                             method: 'POST',
                             mode: 'cors',
                             credentials: 'include',
